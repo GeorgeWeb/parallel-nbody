@@ -46,4 +46,15 @@ static constexpr auto sycl_mode_read_write = cl::sycl::access::mode::read_write;
 // ...
 static constexpr auto sycl_target_local = cl::sycl::access::target::local;
 
-#endif // SYCL_UTILS_SYCL_MEMORY_UTIL_HPP_
+// lambda that determines a fairly optimal local size for a work-group
+template <int length>
+static size_t get_optimal_local_size(const cl::sycl::queue &queue) {
+  // find the max work-group size for the selected device
+  const size_t work_group_size_limit =
+      queue.get_device()
+          .template get_info<cl::sycl::info::device::max_work_group_size>();
+  // get the min from the max work-group size and total num of elements
+  return std::min(static_cast<size_t>(length), work_group_size_limit);
+};
+
+#endif  // SYCL_UTILS_SYCL_MEMORY_UTIL_HPP_

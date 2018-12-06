@@ -56,8 +56,7 @@ class NbodyScene {
     // initialise the body system
     for (int i = 0; i < num_bodies; ++i) {
       // initialise body data
-      positions.at(i) = {GetRand(-200.0f, 200.0f),
-                         GetRand(-100.0f, 100.0f),
+      positions.at(i) = {GetRand(-200.0f, 200.0f), GetRand(-100.0f, 100.0f),
                          GetRand(-50.0f, 50.0f)};
       gravities.at(i) = {0.0f, -9.8f, 0.0f};
       masses.at(i) = 1.0f;
@@ -88,28 +87,41 @@ class NbodyScene {
  private:
   sycl::queue queue;
 
+  // basic physics body properties with SYCL underlying data types
   std::array<cl::sycl::float3, num_bodies> gravities;
   std::array<cl::sycl::float3, num_bodies> velocities;
   std::array<cl::sycl::float3, num_bodies> positions;
   std::array<float, num_bodies> masses;
 
+  /* computes gravity force (optimised) with several kernel implementations
+   * allowing to choose from: global, local and coalesced - OpenCL SYCL device
+   * memory access
+   */
   template <int access>
   inline void computeForces() {
     switch (access) {
       case data_access_t::global:
         try {
+          // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
               positions.data(), sycl::range<1>(num_bodies));
           sycl::buffer<float, 1> mass_buf(masses.data(),
                                           sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
               gravities.data(), sycl::range<1>(num_bodies));
+
+          // submit the command group
           queue.submit([&](sycl::handler &cgh) {
+            // define global accessors
             auto position_ptr = position_buf.get_access<sycl_mode_read>(cgh);
             auto mass_ptr = mass_buf.get_access<sycl_mode_read>(cgh);
             auto gravity_ptr = gravity_buf.get_access<sycl_mode_write>(cgh);
+
+            // setup the work group sizes and run the kernel
             cgh.parallel_for(
+                // setup the range
                 sycl::range<1>(num_bodies),
+                // call the kernel functor
                 kernels::ComputeForceKernel<data_access_t::global, num_bodies>(
                     position_ptr, mass_ptr, gravity_ptr));
           });
@@ -120,18 +132,30 @@ class NbodyScene {
         break;
       case data_access_t::local:
         try {
+          // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
               positions.data(), sycl::range<1>(num_bodies));
           sycl::buffer<float, 1> mass_buf(masses.data(),
                                           sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
               gravities.data(), sycl::range<1>(num_bodies));
+
+          // submit the command group
           queue.submit([&](sycl::handler &cgh) {
+            // define global accessors
             auto position_ptr = position_buf.get_access<sycl_mode_read>(cgh);
             auto mass_ptr = mass_buf.get_access<sycl_mode_read>(cgh);
             auto gravity_ptr = gravity_buf.get_access<sycl_mode_write>(cgh);
+
+            // define local accessors (scratch-pads)
+            const auto local_size = get_optimal_local_size<num_bodies>(queue);
+            // ...
+
+            // setup the work group sizes and run the kernel
             cgh.parallel_for(
+                // setup the range
                 sycl::range<1>(num_bodies),
+                // call the kernel functor
                 kernels::ComputeForceKernel<data_access_t::local, num_bodies>(
                     position_ptr, mass_ptr, gravity_ptr));
           });
@@ -140,53 +164,25 @@ class NbodyScene {
           exit(1);
         }
         break;
+      case data_access_t::coalesced:
+        // TODO: ...
+        break;
       default:
+        // must be called with one of the above parameters
         break;
     }
   }
 
+  /* computes body velocity and position integration with several kernel
+   * implementations allowing to choose from: global, local and coalesced -
+   * OpenCL SYCL device memory access.
+   */
   template <int access>
   inline void integrateBodies() {
     switch (access) {
       case data_access_t::global:
         try {
-          sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
-              gravities.data(), sycl::range<1>(num_bodies));
-          sycl::buffer<cl::sycl::cl_float3, 1> veclocity_buf(
-              velocities.data(), sycl::range<1>(num_bodies));
-          sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
-              positions.data(), sycl::range<1>(num_bodies));
-
-          queue.submit([&](sycl::handler &cgh) {
-            const auto gravity_ptr =
-                gravity_buf.get_access<sycl_mode_read>(cgh);
-            auto velocity_ptr =
-                veclocity_buf.get_access<sycl_mode_read_write>(cgh);
-            auto position_ptr =
-                position_buf.get_access<sycl_mode_read_write>(cgh);
-            cgh.parallel_for(
-                sycl::range<1>(num_bodies),
-                kernels::IntegrateBodyKernel<data_access_t::global, num_bodies>(
-                    gravity_ptr, velocity_ptr, position_ptr, gfx::delta_time));
-          });
-        } catch (const sycl::exception &e) {
-          std::cout << "Synchronous exception caught:\n" << e.what();
-          exit(1);
-        }
-        break;
-      case data_access_t::local:
-        // find a suitable local group score (for GPUs)
-        static const auto get_optimal_local = [&]() -> size_t {
-          const size_t work_group_size_limit =
-              queue.get_device()
-                  .template get_info<sycl::info::device::max_work_group_size>();
-          // return the minimum from max work-group size and total num of
-          // elements
-          return std::min(static_cast<size_t>(num_bodies),
-                          work_group_size_limit);
-        };
-        // ...
-        try {
+          // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
               gravities.data(), sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> veclocity_buf(
@@ -196,6 +192,7 @@ class NbodyScene {
 
           // submit the command group
           queue.submit([&](sycl::handler &cgh) {
+            // define global accessors
             const auto gravity_ptr =
                 gravity_buf.get_access<sycl_mode_read>(cgh);
             auto velocity_ptr =
@@ -203,18 +200,52 @@ class NbodyScene {
             auto position_ptr =
                 position_buf.get_access<sycl_mode_read_write>(cgh);
 
-            // scratch-pads
+            // setup the work group sizes and run the kernel
+            cgh.parallel_for(
+                // setup the range
+                sycl::range<1>(num_bodies),
+                // call the kernel functor
+                kernels::IntegrateBodyKernel<data_access_t::global, num_bodies>(
+                    gravity_ptr, velocity_ptr, position_ptr, gfx::delta_time));
+          });
+        } catch (const sycl::exception &e) {
+          std::cout << "Synchronous exception caught:\n" << e.what();
+          exit(1);
+        }
+        break;
+      case data_access_t::local:
+        try {
+          // create buffers from the host data
+          sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
+              gravities.data(), sycl::range<1>(num_bodies));
+          sycl::buffer<cl::sycl::cl_float3, 1> veclocity_buf(
+              velocities.data(), sycl::range<1>(num_bodies));
+          sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
+              positions.data(), sycl::range<1>(num_bodies));
+
+          // submit the command group
+          queue.submit([&](sycl::handler &cgh) {
+            // define global accessors
+            const auto gravity_ptr =
+                gravity_buf.get_access<sycl_mode_read>(cgh);
+            auto velocity_ptr =
+                veclocity_buf.get_access<sycl_mode_read_write>(cgh);
+            auto position_ptr =
+                position_buf.get_access<sycl_mode_read_write>(cgh);
+
+            // define local accessors (scratch-pads)
+            const auto local_size = get_optimal_local_size<num_bodies>(queue);
             read_write_accessor_t<cl::sycl::float3, 1, sycl_target_local>
-                velocity_scratch_ptr(get_optimal_local(), cgh);
+                velocity_scratch_ptr(local_size, cgh);
             read_write_accessor_t<cl::sycl::float3, 1, sycl_target_local>
-                position_scratch_ptr(get_optimal_local(), cgh);
+                position_scratch_ptr(local_size, cgh);
 
             // setup the work group sizes and run the kernel
             cgh.parallel_for(
-                // range
+                // setup the range
                 sycl::nd_range<1>(sycl::range<1>(num_bodies),
-                                  sycl::range<1>(get_optimal_local())),
-                // kernel functor
+                                  sycl::range<1>(local_size)),
+                // call the kernel functor
                 kernels::IntegrateBodyKernel<data_access_t::local, num_bodies>(
                     velocity_scratch_ptr, position_scratch_ptr, gravity_ptr,
                     velocity_ptr, position_ptr, gfx::delta_time));
@@ -224,7 +255,11 @@ class NbodyScene {
           exit(1);
         }
         break;
+      case data_access_t::coalesced:
+        // TODO: ...
+        break;
       default:
+        // must be called with one of the above parameters
         break;
     }
   }
