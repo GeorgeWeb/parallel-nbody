@@ -25,19 +25,11 @@ static float GetRand(float lo, float hi) {
 template <int num_bodies>
 class NbodyScene {
  public:
-  // replace these 3 with a window instance
-  int width;
-  int height;
-  std::string title;
+  // graphics screen
+  gfx::Window window;
 
-  std::array<std::shared_ptr<gfx::Mesh>, num_bodies> meshes;
-
-  std::unique_ptr<gfx::Camera> camera;
-  std::unique_ptr<gfx::Shader> shader;
-  std::unique_ptr<gfx::Renderer> renderer;
-
-  NbodyScene(int t_width, int t_height, std::string_view t_title)
-      : width(t_width), height(t_height), title(t_title) {
+  // constructs a scene from a window definition
+  explicit NbodyScene(gfx::Window t_window) : window(std::move(t_window)) {
     // selecting device using sycl
     queue = create_queue();
   }
@@ -46,26 +38,26 @@ class NbodyScene {
     // c-style seeding the rand() generator
     srand(time(0));
 
-    // initialise shader program
-    shader = std::make_unique<gfx::Shader>("shaders/default.vert",
-                                           "shaders/default.frag");
-    // initialise renderer for this scene
-    renderer = std::make_unique<gfx::Renderer>();
-    camera = std::make_unique<gfx::Camera>(glm::vec3(0.0f, 0.0f, 500.0f));
+    // initialise m_shader program
+    m_shader = std::make_unique<gfx::Shader>("shaders/default.vert",
+                                             "shaders/default.frag");
+    // initialise m_renderer for this scene
+    m_renderer = std::make_unique<gfx::Renderer>();
+    m_camera = std::make_unique<gfx::Camera>(glm::vec3(0.0f, 0.0f, 500.0f));
 
     // initialise the body system
     for (int i = 0; i < num_bodies; ++i) {
       // initialise body data
-      positions.at(i) = {GetRand(-200.0f, 200.0f), GetRand(-100.0f, 100.0f),
-                         GetRand(-50.0f, 50.0f)};
-      gravities.at(i) = {0.0f, -9.8f, 0.0f};
-      masses.at(i) = 1.0f;
+      m_positions.at(i) = {GetRand(-200.0f, 200.0f), GetRand(-100.0f, 100.0f),
+                           GetRand(-50.0f, 50.0f)};
+      m_gravities.at(i) = {0.0f, -9.8f, 0.0f};
+      m_masses.at(i) = 1.0f;
 
-      // initialise meshes
-      meshes.at(i) = std::make_shared<gfx::Mesh>(gfx::Shape::CUBE);
+      // initialise m_meshes
+      m_meshes.at(i) = std::make_shared<gfx::Mesh>(gfx::Shape::CUBE);
     }
 
-    // move meshes
+    // move m_meshes
     updateMeshPositions();
   }
 
@@ -74,41 +66,50 @@ class NbodyScene {
     computeForces<data_access_t::global>();
     integrateBodies<data_access_t::local>();
 
-    // move meshes
+    // move m_meshes
     updateMeshPositions();
   }
 
   void OnDraw() {
     for (int i = 0; i < num_bodies; ++i) {
-      renderer->Draw(shader, camera, meshes.at(i));
+      m_renderer->Draw(m_shader, m_camera, m_meshes.at(i));
     }
   }
 
  private:
-  sycl::queue queue;
+  // rendering controllers
+  std::unique_ptr<gfx::Camera> m_camera;
+  std::unique_ptr<gfx::Shader> m_shader;
+  std::unique_ptr<gfx::Renderer> m_renderer;
+
+  // m_meshes to graphically represent the body simulation
+  std::array<std::shared_ptr<gfx::Mesh>, num_bodies> m_meshes;
 
   // basic physics body properties with SYCL underlying data types
-  std::array<cl::sycl::float3, num_bodies> gravities;
-  std::array<cl::sycl::float3, num_bodies> velocities;
-  std::array<cl::sycl::float3, num_bodies> positions;
-  std::array<float, num_bodies> masses;
+  std::array<cl::sycl::float3, num_bodies> m_gravities;
+  std::array<cl::sycl::float3, num_bodies> m_velocities;
+  std::array<cl::sycl::float3, num_bodies> m_positions;
+  std::array<float, num_bodies> m_masses;
+
+  // OpenCL SYCL queue; used to select device and submit command groups
+  sycl::queue queue;
 
   /* computes gravity force (optimised) with several kernel implementations
    * allowing to choose from: global, local and coalesced - OpenCL SYCL device
    * memory access
    */
-  template <int access>
+  template <int AccessOption>
   inline void computeForces() {
-    switch (access) {
+    switch (AccessOption) {
       case data_access_t::global:
         try {
           // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
-              positions.data(), sycl::range<1>(num_bodies));
-          sycl::buffer<float, 1> mass_buf(masses.data(),
+              m_positions.data(), sycl::range<1>(num_bodies));
+          sycl::buffer<float, 1> mass_buf(m_masses.data(),
                                           sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
-              gravities.data(), sycl::range<1>(num_bodies));
+              m_gravities.data(), sycl::range<1>(num_bodies));
 
           // submit the command group
           queue.submit([&](sycl::handler &cgh) {
@@ -134,11 +135,11 @@ class NbodyScene {
         try {
           // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
-              positions.data(), sycl::range<1>(num_bodies));
-          sycl::buffer<float, 1> mass_buf(masses.data(),
+              m_positions.data(), sycl::range<1>(num_bodies));
+          sycl::buffer<float, 1> mass_buf(m_masses.data(),
                                           sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
-              gravities.data(), sycl::range<1>(num_bodies));
+              m_gravities.data(), sycl::range<1>(num_bodies));
 
           // submit the command group
           queue.submit([&](sycl::handler &cgh) {
@@ -148,8 +149,10 @@ class NbodyScene {
             auto gravity_ptr = gravity_buf.get_access<sycl_mode_write>(cgh);
 
             // define local accessors (scratch-pads)
-            const auto local_size = get_optimal_local_size<num_bodies>(queue);
-            // ...
+            /*
+                        const auto local_size =
+                       get_optimal_local_size<num_bodies>(queue);
+                        */
 
             // setup the work group sizes and run the kernel
             cgh.parallel_for(
@@ -177,18 +180,18 @@ class NbodyScene {
    * implementations allowing to choose from: global, local and coalesced -
    * OpenCL SYCL device memory access.
    */
-  template <int access>
+  template <int AccessOption>
   inline void integrateBodies() {
-    switch (access) {
+    switch (AccessOption) {
       case data_access_t::global:
         try {
           // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
-              gravities.data(), sycl::range<1>(num_bodies));
+              m_gravities.data(), sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> veclocity_buf(
-              velocities.data(), sycl::range<1>(num_bodies));
+              m_velocities.data(), sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
-              positions.data(), sycl::range<1>(num_bodies));
+              m_positions.data(), sycl::range<1>(num_bodies));
 
           // submit the command group
           queue.submit([&](sycl::handler &cgh) {
@@ -217,11 +220,11 @@ class NbodyScene {
         try {
           // create buffers from the host data
           sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
-              gravities.data(), sycl::range<1>(num_bodies));
+              m_gravities.data(), sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> veclocity_buf(
-              velocities.data(), sycl::range<1>(num_bodies));
+              m_velocities.data(), sycl::range<1>(num_bodies));
           sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
-              positions.data(), sycl::range<1>(num_bodies));
+              m_positions.data(), sycl::range<1>(num_bodies));
 
           // submit the command group
           queue.submit([&](sycl::handler &cgh) {
@@ -264,10 +267,11 @@ class NbodyScene {
     }
   }
 
+  // sets mesh m_positions to match the newly computed body position
   inline void updateMeshPositions() {
     for (int i = 0; i < num_bodies; ++i) {
-      meshes.at(i)->SetPosition(glm::vec3(
-          positions.at(i).x(), positions.at(i).y(), positions.at(i).z()));
+      m_meshes.at(i)->SetPosition(glm::vec3(
+          m_positions.at(i).x(), m_positions.at(i).y(), m_positions.at(i).z()));
     }
   }
 };

@@ -1,0 +1,46 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/common.hpp
+
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/compute_force_kernel.hpp
+common.hpp
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/common.hpp
+sycl_utils.hpp
+-
+
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/integrate_body_kernel.hpp
+common.hpp
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/common.hpp
+sycl_utils.hpp
+-
+
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/nbody-sycl.cpp
+nbody-sycl.hpp
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/nbody-sycl.hpp
+
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/nbody-sycl.hpp
+stdlib.h
+-
+time.h
+-
+iostream
+-
+memory
+-
+random
+-
+string
+-
+graphics.hpp
+-
+kernels/compute_force_kernel.hpp
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/compute_force_kernel.hpp
+kernels/integrate_body_kernel.hpp
+/home/georgi/Projects/parallel-nbody/nbody-sycl/src/kernels/integrate_body_kernel.hpp
+

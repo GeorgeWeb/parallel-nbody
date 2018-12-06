@@ -42,9 +42,9 @@ class Application {
   // provides the ability to create an application from existing scene setup
   template <class Scene>
   void LoadScene(const std::shared_ptr<Scene> &scene) {
-    // create the application's window
-    m_window = Window(scene->width, scene->height, scene->title);
-    // assign application's main loop functions
+    // define the application window
+    m_window = std::move(scene->window);
+    // assign application main loop functions
     const auto load_event = std::mem_fn(&Scene::OnLoad);
     const auto update_event = std::mem_fn(&Scene::OnUpdate);
     const auto draw_event = std::mem_fn(&Scene::OnDraw);
