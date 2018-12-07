@@ -2,7 +2,7 @@
 #include "nbody-omp.hpp"
 
 // number of n-body elements
-static constexpr int num_bodies = 1024 / 2;
+static constexpr int num_bodies = 512;
 
 // graphics window constants
 static constexpr int screen_width = 1280;

@@ -2,7 +2,7 @@
 #include "nbody-sycl.hpp"
 
 // number of n-body elements
-static constexpr int num_bodies = 1024 * 4;
+static constexpr int num_bodies = 4096;
 
 // graphics window constants
 static constexpr int screen_width = 1280;

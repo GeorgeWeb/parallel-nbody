@@ -61,7 +61,6 @@ target_include_directories(graphics INTERFACE ${GRAPHICS_VENDOR_DIR}/glm/include
 target_include_directories(graphics INTERFACE ${GRAPHICS_VENDOR_DIR}/debugbreak/include)
 
 # generate the sandbox apps
-add_subdirectory(nbody)      # nbody simulation app
-add_subdirectory(nbody-omp)  # OpenMP nbody simulation app
-add_subdirectory(nbody-sycl) # OpenCL SYCL nbody simulation app
-#add_subdirectory(nbody-cuda) # CUDA nbody simulation app
+add_subdirectory(nbody)        # nbody simulation app
+add_subdirectory(nbody-omp)    # OpenMP nbody simulation app
+add_subdirectory(nbody-sycl)   # OpenCL SYCL nbody simulation app

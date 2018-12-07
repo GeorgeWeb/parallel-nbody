@@ -2,6 +2,7 @@
 #define SYCL_UTILS_SYCL_MEMORY_UTIL_HPP_
 
 #include <CL/sycl.hpp>
+#include <iostream>
 
 // accessors type aliases
 // read accessor
@@ -46,15 +47,26 @@ static constexpr auto sycl_mode_read_write = cl::sycl::access::mode::read_write;
 // ...
 static constexpr auto sycl_target_local = cl::sycl::access::target::local;
 
-// lambda that determines a fairly optimal local size for a work-group
-template <int length>
-static size_t get_optimal_local_size(const cl::sycl::queue &queue) {
-  // find the max work-group size for the selected device
-  const size_t work_group_size_limit =
+// computes the highest power of 2 number of compute units
+static size_t roundup_cu(const cl::sycl::queue &queue) {
+  // TODO: dynamically calculate ...
+  if (queue.get_device().is_cpu()) {
+    return 8;
+  }
+  return 16;  /// gpu
+}
+
+// determines the highest-possible-most-optimal size a work-group range length
+template <int total_length>
+static size_t best_work_group_length(const cl::sycl::queue &queue) {
+  // max (pow of 2) compute units
+  const size_t num_groups = roundup_cu(queue);
+  // max work-group size
+  const size_t group_size_limit =
       queue.get_device()
           .template get_info<cl::sycl::info::device::max_work_group_size>();
-  // get the min from the max work-group size and total num of elements
-  return std::min(static_cast<size_t>(length), work_group_size_limit);
+  return std::min(static_cast<size_t>(total_length / num_groups),
+                  group_size_limit);
 };
 
 #endif  // SYCL_UTILS_SYCL_MEMORY_UTIL_HPP_

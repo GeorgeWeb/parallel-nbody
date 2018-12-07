@@ -13,7 +13,7 @@ namespace kernels {
 template <int access, int num_bodies>
 class IntegrateBodyKernel;
 
-// global memory partial specialisation definition
+// global memory access partial specialisation definition
 template <int num_bodies>
 class IntegrateBodyKernel<data_access_t::global, num_bodies> {
  public:
@@ -44,7 +44,7 @@ class IntegrateBodyKernel<data_access_t::global, num_bodies> {
   const float m_time_step;
 };
 
-// local memory partial specialisation definition
+// local memory access partial specialisation definition
 template <int num_bodies>
 class IntegrateBodyKernel<data_access_t::local, num_bodies> {
  public:
@@ -70,18 +70,18 @@ class IntegrateBodyKernel<data_access_t::local, num_bodies> {
     const auto global_id = item.get_global_id(0);
     const auto local_id = item.get_local_id(0);
 
-    // read to data local device memory (scratch-pads)
+    // read to data local device memory
     m_velocity_scratch_ptr[local_id] = m_velocity_ptr[global_id];
     m_position_scratch_ptr[local_id] = m_position_ptr[global_id];
 
     // integrate the new velocities and positions
     m_velocity_scratch_ptr[local_id] += m_gravity_ptr[global_id] * m_time_step;
-    m_position_scratch_ptr[local_id] += m_velocity_ptr[global_id] * m_time_step;
+    m_position_scratch_ptr[local_id] += m_velocity_scratch_ptr[local_id] * m_time_step;
 
     // sync work-items within the work-group when writing is over
     item.barrier(sycl::access::fence_space::local_space);
 
-    // output the calculated results from the scratch-pads
+    // output the calculated results from the local device memory
     m_velocity_ptr[global_id] = m_velocity_scratch_ptr[local_id];
     m_position_ptr[global_id] = m_position_scratch_ptr[local_id];
   }

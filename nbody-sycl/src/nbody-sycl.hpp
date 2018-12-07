@@ -31,7 +31,7 @@ class NbodyScene {
   // constructs a scene from a window definition
   explicit NbodyScene(gfx::Window t_window) : window(std::move(t_window)) {
     // selecting device using sycl
-    queue = create_queue();
+    queue = create_queue(sycl::cpu_selector{});
   }
 
   void OnLoad() {
@@ -63,8 +63,18 @@ class NbodyScene {
 
   void OnUpdate() {
     // move bodies
-    computeForces<data_access_t::global>();
-    integrateBodies<data_access_t::local>();
+    if (queue.get_device().is_cpu()) {
+      computeForces<data_access_t::coalesced>();
+      integrateBodies<data_access_t::global>();
+    } else if (queue.get_device().is_gpu()) {
+      computeForces<data_access_t::coalesced>();
+      integrateBodies<data_access_t::local>();
+    } else {
+      std::cout << "\nApplication is shutting down ...\n";
+      std::cout << "The selected device is not considered for this program\n\n";
+      // note: for the same reasons the SYCL host device is also avoided
+      exit(1);
+    }
 
     // move m_meshes
     updateMeshPositions();
@@ -148,19 +158,19 @@ class NbodyScene {
             auto mass_ptr = mass_buf.get_access<sycl_mode_read>(cgh);
             auto gravity_ptr = gravity_buf.get_access<sycl_mode_write>(cgh);
 
-            // define local accessors (scratch-pads)
-            /*
-                        const auto local_size =
-                       get_optimal_local_size<num_bodies>(queue);
-                        */
+            // define local accessors
+            const auto local_size = best_work_group_length<num_bodies>(queue);
+            read_write_accessor_t<cl::sycl::float3, 1, sycl_target_local>
+                gravity_scratch_ptr(local_size, cgh);
 
             // setup the work group sizes and run the kernel
             cgh.parallel_for(
                 // setup the range
-                sycl::range<1>(num_bodies),
+                sycl::nd_range<1>(sycl::range<1>(num_bodies),
+                                  sycl::range<1>(local_size)),
                 // call the kernel functor
                 kernels::ComputeForceKernel<data_access_t::local, num_bodies>(
-                    position_ptr, mass_ptr, gravity_ptr));
+                    gravity_scratch_ptr, position_ptr, mass_ptr, gravity_ptr));
           });
         } catch (const sycl::exception &e) {
           std::cout << "Synchronous exception caught:\n" << e.what();
@@ -168,7 +178,44 @@ class NbodyScene {
         }
         break;
       case data_access_t::coalesced:
-        // TODO: ...
+        try {
+          // create buffers from the host data
+          sycl::buffer<cl::sycl::cl_float3, 1> position_buf(
+              m_positions.data(), sycl::range<1>(num_bodies));
+          sycl::buffer<float, 1> mass_buf(m_masses.data(),
+                                          sycl::range<1>(num_bodies));
+          sycl::buffer<cl::sycl::cl_float3, 1> gravity_buf(
+              m_gravities.data(), sycl::range<1>(num_bodies));
+
+          // define local accessors
+          const auto num_groups = roundup_cu(queue);
+          // getting the maximum work group size per thread
+          const auto work_group_size =
+              best_work_group_length<num_bodies>(queue);  // 256;
+          // building the best number of global thread
+          const auto total_threads = num_groups * work_group_size;
+
+          // submit the command group
+          queue.submit([&](sycl::handler &cgh) {
+            // define global accessors
+            auto position_ptr = position_buf.get_access<sycl_mode_read>(cgh);
+            auto mass_ptr = mass_buf.get_access<sycl_mode_read>(cgh);
+            auto gravity_ptr = gravity_buf.get_access<sycl_mode_write>(cgh);
+
+            // setup the work group sizes and run the kernel
+            cgh.parallel_for(
+                // setup the range
+                sycl::nd_range<1>(sycl::range<1>(total_threads / 2),
+                                  sycl::range<1>(work_group_size / 2)),
+                // call the kernel functor
+                kernels::ComputeForceKernel<data_access_t::coalesced,
+                                            num_bodies>(position_ptr, mass_ptr,
+                                                        gravity_ptr));
+          });
+        } catch (const sycl::exception &e) {
+          std::cout << "Synchronous exception caught:\n" << e.what();
+          exit(1);
+        }
         break;
       default:
         // must be called with one of the above parameters
@@ -236,8 +283,8 @@ class NbodyScene {
             auto position_ptr =
                 position_buf.get_access<sycl_mode_read_write>(cgh);
 
-            // define local accessors (scratch-pads)
-            const auto local_size = get_optimal_local_size<num_bodies>(queue);
+            // define local accessors
+            const auto local_size = best_work_group_length<num_bodies>(queue);
             read_write_accessor_t<cl::sycl::float3, 1, sycl_target_local>
                 velocity_scratch_ptr(local_size, cgh);
             read_write_accessor_t<cl::sycl::float3, 1, sycl_target_local>
