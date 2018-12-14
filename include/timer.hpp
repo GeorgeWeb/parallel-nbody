@@ -18,7 +18,7 @@ template <typename T, typename Ratio>
 std::ostream &operator<<(std::ostream &os, const Timer<T, Ratio> &obj);
 
 // implementing the Timer class
-template <typename T = double, typename Ratio = std::ratio<1, 1>>
+template <typename T = double, typename Ratio = std::milli>
 class Timer final {
   // convenience type aliases
   using clock = std::chrono::high_resolution_clock;
@@ -30,21 +30,20 @@ class Timer final {
 
   inline void Reset() { m_initial_tp = clock::now(); }
 
-  inline T GetElapsedTime() const {
+  inline T GetElapsed() const {
     duration elapsed = clock::now() - m_initial_tp;
     return elapsed.count();
   }
 
   inline std::string RatioToString() const {
-    return std::string(std::is_same<Ratio, std::ratio<1, 1>>::value
-                           ? "second(s)"
-                           : std::is_same<Ratio, std::milli>::value
-                                 ? "millisecond(s)"
-                                 : std::is_same<Ratio, std::micro>::value
-                                       ? "microsecond(s)"
-                                       : std::is_same<Ratio, std::nano>::value
-                                             ? "nanosecond(s)"
-                                             : "");
+    return std::string(
+        std::is_same<Ratio, std::ratio<1, 1>>::value
+            ? "s"
+            : std::is_same<Ratio, std::milli>::value
+                  ? "ms"
+                  : std::is_same<Ratio, std::micro>::value
+                        ? "\u03BCs"
+                        : std::is_same<Ratio, std::nano>::value ? "ns" : "");
   }
 
   // declaring operator<< overload for class Timer
@@ -57,7 +56,7 @@ class Timer final {
 // implementing the operator<< overload for class Timer
 template <typename T, typename Ratio>
 std::ostream &operator<<(std::ostream &os, const Timer<T, Ratio> &obj) {
-  return os << obj.GetElapsedTime() << ' ' << obj.RatioToString();
+  return os << obj.GetElapsed() << ' ' << obj.RatioToString();
 }
 
 }  // namespace timer

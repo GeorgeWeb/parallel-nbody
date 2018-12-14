@@ -8,17 +8,18 @@ set(PROJECT_SOURCE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp
 )
 
-# build graphics project as an interface library (header-only)
+# build sycl_utils as an interface library (header-only)
 set(SYCL_UTILS_DIR ${INCLUDE_DIR}/sycl_utils)
 add_library(sycl_utils INTERFACE)
 if(MSVC)
 add_custom_target(sycl_utils.headers SOURCES 
-  ${INCLUDE_DIR}/sycl_utils/sycl_utils.hpp
-  ${INCLUDE_DIR}/sycl_utils/device/device_util.hpp
-  ${INCLUDE_DIR}/sycl_utils/memory/memory_util.hpp
+  ${SYCL_UTILS_DIR}/sycl_utils.hpp
+  ${SYCL_UTILS_DIR}/device/device_util.hpp
+  ${SYCL_UTILS_DIR}/memory/memory_util.hpp
+  ${SYCL_UTILS_DIR}/profiling/profiling_util.hpp
 )
 endif()
-target_include_directories(graphics INTERFACE ${SYCL_UTILS_DIR})
+target_include_directories(sycl_utils INTERFACE ${SYCL_UTILS_DIR})
 
 # executable definition
 add_executable(

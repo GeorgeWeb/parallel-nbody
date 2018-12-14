@@ -49,11 +49,16 @@ static constexpr auto sycl_target_local = cl::sycl::access::target::local;
 
 // computes the highest power of 2 number of compute units
 static size_t roundup_cu(const cl::sycl::queue &queue) {
-  // TODO: dynamically calculate ...
+  /* TODO(GeorgeWeb):
+   * Dynamically determine the returned number of compute units, because
+   * currently it's based hardcoded based on the hardware specifications of my
+   * development machine (Inte CPU + Intel GPU).
+   */
   if (queue.get_device().is_cpu()) {
     return 8;
   }
-  return 16;  /// gpu
+  // else: gpu
+  return 16;
 }
 
 // determines the highest-possible-most-optimal size a work-group range length

@@ -13,11 +13,13 @@
 #include <graphics.hpp>
 namespace gfx = graphics;
 
-// abstract in a header file in the root /include dir.
-static float GetRand(float lo, float hi) {
-  return lo + static_cast<float>(rand()) /
-                  (static_cast<float>(RAND_MAX / (hi - lo)));
-}
+#include "crand.hpp"
+#include "file_io.hpp"
+#include "timer.hpp"
+
+#ifndef MAX_TIME_STEPS
+#define MAX_TIME_STEPS 600
+#endif  // MAX_TIME_STEPS
 
 // gravity constant
 static constexpr float k_grav = 6.67408f;
@@ -73,31 +75,101 @@ class NbodyScene {
 
   void OnLoad() {
     // c-style seeding the rand() generator
-    srand(time(0));
+    crand::SeedRand();
 
     // initialise m_shader program
     m_shader = std::make_unique<gfx::Shader>("shaders/default.vert",
                                              "shaders/default.frag");
     // initialise m_renderer for this scene
     m_renderer = std::make_unique<gfx::Renderer>();
-    m_camera = std::make_unique<gfx::Camera>(glm::vec3(0.0f, 0.0f, 500.0f / 4));
+    m_camera = std::make_unique<gfx::Camera>(glm::vec3(0.0f, 0.0f, 500.0f));
 
     // initiate the body system
     for (int i = 0; i < num_bodies; ++i) {
       // insantiate a body at random position
       auto body = std::make_shared<Body>();
       body->GetMesh()->Scale(glm::vec3(2.0f));
-      body->SetPosition(glm::vec3(GetRand(-200.0f / 4, 200.0f / 4),
-                                  GetRand(-100.0f / 4, 100.0f / 4),
-                                  GetRand(-50.0f / 4, 50.0f / 4)));
+      body->SetPosition(glm::vec3(crand::GetRand(-200.0f, 200.0f),
+                                  crand::GetRand(-100.0f, 100.0f),
+                                  crand::GetRand(-50.0f, 50.0f)));
       body->SetMass(1.0f);
       m_bodies.push_back(std::move(body));
     }
   }
 
   void OnUpdate() {
-    computeForces();
-    integrateBodies();
+    using timer::Timer;
+    typedef file_io::FileIO fio;
+
+    static std::vector<double> forces_times(MAX_TIME_STEPS);
+    static std::vector<double> integration_times(MAX_TIME_STEPS);
+
+    std::cout << "\nenter time step #" << gfx::time_step_count << std::endl;
+    // compute forces in the n-body system
+    {
+      static const std::string filename("ComputeForces.csv");
+      // ...
+      if (gfx::time_step_count == 0) {
+        fio::instance().Save("ComputeForces", filename);
+      }
+      // ...
+      Timer<double, std::milli> forces_timer{};
+      // ...
+      computeForces();
+      // ...
+      const auto exec_time = forces_timer.GetElapsed();
+      if (gfx::time_step_count >= 0 && gfx::time_step_count < MAX_TIME_STEPS) {
+        forces_times.push_back(exec_time);
+      }
+      // get the current exuction time
+      std::cout << "compute forces (execution time): " << exec_time << " "
+                << forces_timer.RatioToString() << std::endl;
+      // get the average exuction time
+      if (gfx::time_step_count == MAX_TIME_STEPS) {
+        const auto avg_exec_time =
+            std::accumulate(std::begin(forces_times), std::end(forces_times),
+                            0.0) /
+            forces_times.size();
+        fio::instance().Save(avg_exec_time, filename);
+        std::cout << "compute forces ([AVERAGE] execution time)"
+                  << avg_exec_time << std::endl;
+      }
+    }
+    // integrate the n-body system
+    {
+      static const std::string filename("IntegrateBodies.csv");
+      // ...
+      if (gfx::time_step_count == 0) {
+        fio::instance().Save("IntegrateBodies", filename);
+      }
+      // ...
+      Timer<double, std::milli> integration_timer{};
+      // ...
+      integrateBodies();
+      const auto exec_time = integration_timer.GetElapsed();
+      if (gfx::time_step_count >= 0 && gfx::time_step_count < MAX_TIME_STEPS) {
+        integration_times.push_back(exec_time);
+      }
+      // get the current exuction time
+      std::cout << "integrate bodies (execution time): " << exec_time << " "
+                << integration_timer.RatioToString() << std::endl;
+      // get the average exuction time
+      if (gfx::time_step_count == MAX_TIME_STEPS) {
+        const auto avg_exec_time =
+            std::accumulate(std::begin(integration_times),
+                            std::end(integration_times), 0.0) /
+            forces_times.size();
+        fio::instance().Save(avg_exec_time, filename);
+        std::cout << "integrate bodies ([AVERAGE] execution time)"
+                  << avg_exec_time << std::endl;
+      }
+    }
+
+    // temp. for profiling debug
+    if (gfx::time_step_count == MAX_TIME_STEPS) {
+      std::cout << "Finished profiling\n";
+      exit(1);
+    }
   }
 
   void OnDraw() {

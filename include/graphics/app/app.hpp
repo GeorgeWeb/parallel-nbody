@@ -12,6 +12,7 @@ float graphics::delta_time{0.0f};
 float graphics::current_time{0.0f};
 float graphics::last_time{0.0f};
 float graphics::accumulator{0.0f};
+int graphics::time_step_count{0};
 
 #define PROFLIE_FPS
 
@@ -107,6 +108,9 @@ class Application {
 
       // reset accumulator
       accumulator -= delta_time;
+
+      // update the number of time steps ran until now
+      time_step_count++;
     }
 
 #ifdef PROFLIE_FPS

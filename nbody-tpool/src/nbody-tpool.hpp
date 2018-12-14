@@ -1,16 +1,17 @@
-#ifndef NBODY_OMP_HPP_
-#define NBODY_OMP_HPP_
+#ifndef NBODY_TPOOL_HPP_
+#define NBODY_TPOOL_HPP_
 
 #include <stdlib.h>
 #include <time.h>
+#include <algorithm>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <random>
 #include <string>
-#include <thread>
 #include <vector>
 
-#include <omp.h>
+#include "tpool/tpool.hpp"
 
 // cross-platform graphics library
 #include <graphics.hpp>
@@ -21,7 +22,7 @@ namespace gfx = graphics;
 #include "timer.hpp"
 
 #ifndef MAX_TIME_STEPS
-#define MAX_TIME_STEPS 600
+#define MAX_TIME_STEPS 10
 #endif  // MAX_TIME_STEPS
 
 // gravity constant
@@ -108,10 +109,16 @@ class NbodyScene {
     static std::vector<double> forces_times(MAX_TIME_STEPS);
     static std::vector<double> integration_times(MAX_TIME_STEPS);
 
+    // declare(with default init) a thread pool object
+    tpool::std_queue::thread_pool pool{thread_num};
+    // Declares a vector of future objects holding the functions that will be
+    // executed to perform hash calculation.
+    std::vector<std::future<void>> work_items(pool.count());
+
     std::cout << "\nenter time step #" << gfx::time_step_count << std::endl;
     // compute forces in the n-body system
     {
-      static const std::string filename("ComputeForcesOmp.csv");
+      static const std::string filename("ComputeForcesTPool.csv");
       // ...
       if (gfx::time_step_count == 0) {
         fio::instance().Save("ComputeForces", filename);
@@ -119,7 +126,7 @@ class NbodyScene {
       // ...
       Timer<double, std::milli> forces_timer{};
       // ...
-      computeForces();
+      computeForces(pool, work_items);
       // ...
       const auto exec_time = forces_timer.GetElapsed();
       if (gfx::time_step_count >= 0 && gfx::time_step_count < MAX_TIME_STEPS) {
@@ -141,7 +148,7 @@ class NbodyScene {
     }
     // integrate the n-body system
     {
-      static const std::string filename("IntegrateBodiesOmp.csv");
+      static const std::string filename("IntegrateBodiesTPool.csv");
       // ...
       if (gfx::time_step_count == 0) {
         fio::instance().Save("IntegrateBodies", filename);
@@ -149,7 +156,7 @@ class NbodyScene {
       // ...
       Timer<double, std::milli> integration_timer{};
       // ...
-      integrateBodies();
+      integrateBodies(pool, work_items);
       const auto exec_time = integration_timer.GetElapsed();
       if (gfx::time_step_count >= 0 && gfx::time_step_count < MAX_TIME_STEPS) {
         integration_times.push_back(exec_time);
@@ -195,48 +202,71 @@ class NbodyScene {
    * are implemented sequentially, though, in a way that allows for parallel
    * optimisation. */
 
-  // inegrates each body's position
-  void integrateBodies() {
-    // apply eueler's integration for each body's velocity and acceleration
-    // ... maybe angular velocity too
-#pragma omp parallel for num_threads(thread_num) schedule(static)
-    for (int i = 0; i < num_bodies; ++i) {
-      m_bodies.at(i)->SetAcceleration(m_bodies.at(i)->GetGravity());
-      m_bodies.at(i)->SetVelocity(
-          m_bodies.at(i)->GetVelocity() +
-          (m_bodies.at(i)->GetAcceleration() * gfx::delta_time));
-      m_bodies.at(i)->SetPosition(
-          m_bodies.at(i)->GetPosition() +
-          (m_bodies.at(i)->GetVelocity() * gfx::delta_time));
-    }
+  // implementation is very gravity-specific at this stage
+  void computeForces(tpool::std_queue::thread_pool &pool,
+                     std::vector<std::future<void>> &work_items) {
+    // Submits task threads in the pool a number of (iterations) times and
+    // store.
+    std::for_each(
+        std::begin(work_items), std::end(work_items), [&](auto &item) {
+          item = pool.add_task([this]() {
+            // apply gravitational force to each body's velocity
+            for (int i = 0; i < num_bodies; ++i) {
+              glm::vec3 force_accumulator(0.0f);
+              for (int j = 0; j < num_bodies; ++j) {
+                // calculate distance between m_bodies
+                const glm::vec3 dist = m_bodies.at(j)->GetPosition() -
+                                       m_bodies.at(i)->GetPosition();
+                const float len = glm::length(dist);
+                if (len > 1.0f) {
+                  // calculating gravity force's direction
+                  const glm::vec3 direction = glm::normalize(dist);
+                  // applying Newton's gravity equation: F = G * m1 *
+                  // m2 / d^2
+                  force_accumulator +=
+                      (k_grav *
+                       (m_bodies.at(j)->GetMass() * m_bodies.at(i)->GetMass()) /
+                       (len * len)) *
+                      direction;
+                }
+              }
+              m_bodies.at(i)->SetGravity(force_accumulator);
+            }
+          });
+        });
+
+    // Executes the task threads from the pool.
+    std::for_each(std::begin(work_items), std::end(work_items),
+                  [](auto &item) { item.get(); });
   }
 
-  // implementation is very gravity-specific at this stage
-  void computeForces() {
-// apply gravitational force to each body's velocity
-#pragma omp parallel for num_threads(thread_num) schedule(static)
-    for (int i = 0; i < num_bodies; ++i) {
-      glm::vec3 force_accumulator(0.0f);
-#pragma omp parallel for num_threads(thread_num) schedule(static)
-      for (int j = 0; j < num_bodies; ++j) {
-        // calculate distance between m_bodies
-        const glm::vec3 dist =
-            m_bodies.at(j)->GetPosition() - m_bodies.at(i)->GetPosition();
-        const float len = glm::length(dist);
-        if (len > 1.0f) {
-          // calculating gravity force's direction
-          const glm::vec3 direction = glm::normalize(dist);
-          // applying Newton's gravity equation: F = G * m1 * m2 / d^2
-          force_accumulator +=
-              (k_grav *
-               (m_bodies.at(j)->GetMass() * m_bodies.at(i)->GetMass()) /
-               (len * len)) *
-              direction;
-        }
-      }
-      m_bodies.at(i)->SetGravity(force_accumulator);
-    }
+  // inegrates each body's position
+  void integrateBodies(tpool::std_queue::thread_pool &pool,
+                       std::vector<std::future<void>> &work_items) {
+    // Submits task threads in the pool a number of (iterations) times and
+    // store.
+    std::for_each(
+        std::begin(work_items), std::end(work_items), [&](auto &item) {
+          item = pool.add_task([this]() {
+            // apply eueler's integration for each body's velocity and
+            // acceleration
+            // ... maybe angular velocity too
+            for (int i = 0; i < num_bodies; ++i) {
+              m_bodies.at(i)->SetAcceleration(m_bodies.at(i)->GetGravity());
+              m_bodies.at(i)->SetVelocity(
+                  m_bodies.at(i)->GetVelocity() +
+                  (m_bodies.at(i)->GetAcceleration() * gfx::delta_time));
+              m_bodies.at(i)->SetPosition(
+                  m_bodies.at(i)->GetPosition() +
+                  (m_bodies.at(i)->GetVelocity() * gfx::delta_time));
+            }
+          });
+        });
+
+    // Executes the task threads from the pool.
+    std::for_each(std::begin(work_items), std::end(work_items),
+                  [](auto &item) { item.get(); });
   }
 };
 
-#endif  // NBODY_OMP_HPP_
+#endif  // NBODY_TPOOL_HPP_

@@ -3,5 +3,6 @@
 
 #include "device/device_util.hpp"
 #include "memory/memory_util.hpp"
+#include "profiling/profiling_util.hpp"
 
 #endif  // SYCL_UTILS_HPP_

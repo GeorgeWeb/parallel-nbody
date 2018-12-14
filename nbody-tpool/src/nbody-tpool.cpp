@@ -1,5 +1,5 @@
 // the OpenMP nbody simulation scene
-#include "nbody-omp.hpp"
+#include "nbody-tpool.hpp"
 
 // number of n-body elements
 static constexpr int num_bodies = 4096;
@@ -7,7 +7,7 @@ static constexpr int num_bodies = 4096;
 // graphics window constants
 static constexpr int screen_width = 1280;
 static constexpr int screen_height = 720;
-static constexpr std::string_view screen_title = "#openmp n-body app";
+static constexpr std::string_view screen_title = "#thread-pool n-body app";
 
 // entry point of the nbody application
 int main() {
