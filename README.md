@@ -1,3 +1,5 @@
 # parallel-nbody
-### Optimising nbody-/-nbody |O(n^2)| sequential algorithm via various parallel techniques 
-###### OpenMP and OpenCL SYCL
+### Optimising sequential brute-force n-body calculation via various parallel techniques.
+###### C++ Threads, OpenMP and OpenCL SYCL
+
+![Alt Text](https://media.giphy.com/media/39zWia5Ovd09WC3dB0/giphy.gif)

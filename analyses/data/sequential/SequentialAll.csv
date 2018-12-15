@@ -1,0 +1,17 @@
+ComputeForces (ms),IntegrateBodies (ms),
+1720.08519765,3.88628105,
+,,
+ComputeForces (μs),IntegrateBodies (μs),
+1720085.19765,3886.28105,
+,,
+ComputeForces (μs/log2),IntegrateBodies (μs/log2),
+20.7140485942,11.9241745229,
+,,
+N-body (μs/log2),Compute Forces,Integrate Bodies
+Calculation Times,20.7140485942,11.9241745229
+,,
+N-body (μs),Compute Forces,Integrate Bodies
+Calculation Times,1720085.19765,3886.28105
+,,
+N-body (ms),Compute Forces,Integrate Bodies
+Computation,1720.085,3.886

@@ -1,0 +1,7 @@
+Memory Access,Kernel Submission,Kernel Execution,Overhead,Total
+Global,4.486,19389.924,136.09,19530.5
+Local,5.131,8769.424,170.07,8944.625
+,,,,
+Memory Access,Kernel Submission,Kernel Execution,Overhead,Total
+Global,2.1654296204,14.2430195283,7.0884172501,14.2534412637
+Local,2.3592400255,13.0982663702,7.4099848648,13.1268052838

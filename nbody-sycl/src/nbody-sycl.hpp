@@ -22,7 +22,7 @@ namespace gfx = graphics;
 #include "profiler.hpp"
 
 // ...
-static constexpr auto sycl_option = sycl_option_t::enable_all;
+static constexpr auto sycl_option = sycl_option_t::disabled;
 // how many submissions of each kernel will be executed
 static constexpr auto submissions = 1u;
 
@@ -35,7 +35,7 @@ class NbodyScene {
   // constructs a scene from a window definition
   explicit NbodyScene(gfx::Window t_window) : window(std::move(t_window)) {
     // selecting device using sycl
-    queue = create_queue<sycl_option>(sycl::cpu_selector{});
+    queue = create_queue<sycl_option>(sycl::gpu_selector{});
   }
 
   void OnLoad() {
