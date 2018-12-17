@@ -195,29 +195,12 @@ class NbodyScene {
    * are implemented sequentially, though, in a way that allows for parallel
    * optimisation. */
 
-  // inegrates each body's position
-  void integrateBodies() {
-    // apply eueler's integration for each body's velocity and acceleration
-    // ... maybe angular velocity too
-#pragma omp parallel for num_threads(thread_num) schedule(static)
-    for (int i = 0; i < num_bodies; ++i) {
-      m_bodies.at(i)->SetAcceleration(m_bodies.at(i)->GetGravity());
-      m_bodies.at(i)->SetVelocity(
-          m_bodies.at(i)->GetVelocity() +
-          (m_bodies.at(i)->GetAcceleration() * gfx::delta_time));
-      m_bodies.at(i)->SetPosition(
-          m_bodies.at(i)->GetPosition() +
-          (m_bodies.at(i)->GetVelocity() * gfx::delta_time));
-    }
-  }
-
   // implementation is very gravity-specific at this stage
   void computeForces() {
 // apply gravitational force to each body's velocity
 #pragma omp parallel for num_threads(thread_num) schedule(static)
     for (int i = 0; i < num_bodies; ++i) {
       glm::vec3 force_accumulator(0.0f);
-#pragma omp parallel for num_threads(thread_num) schedule(static)
       for (int j = 0; j < num_bodies; ++j) {
         // calculate distance between m_bodies
         const glm::vec3 dist =
@@ -235,6 +218,21 @@ class NbodyScene {
         }
       }
       m_bodies.at(i)->SetGravity(force_accumulator);
+    }
+  }
+
+  // inegrates each body's position
+  void integrateBodies() {
+    // apply eueler's integration for each body's velocity and acceleration
+#pragma omp parallel for num_threads(thread_num) schedule(static)
+    for (int i = 0; i < num_bodies; ++i) {
+      m_bodies.at(i)->SetAcceleration(m_bodies.at(i)->GetGravity());
+      m_bodies.at(i)->SetVelocity(
+          m_bodies.at(i)->GetVelocity() +
+          (m_bodies.at(i)->GetAcceleration() * gfx::delta_time));
+      m_bodies.at(i)->SetPosition(
+          m_bodies.at(i)->GetPosition() +
+          (m_bodies.at(i)->GetVelocity() * gfx::delta_time));
     }
   }
 };
