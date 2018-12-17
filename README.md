@@ -7,7 +7,7 @@
 | # | Title | Destination | Description |
 |------|----------|------|------------|
 | 1 | N-Body | [Open folder](nbody/) | sequential implementation |
-| 2 | OpenMP N-Body (igx) | [Open folder](nbody-omp/) | openmp parallel implementation |
+| 2 | OpenMP N-Body | [Open folder](nbody-omp/) | openmp parallel implementation |
 | 3 | SYCL N-Body | [Open folder](nbody-sycl/) | SYCL parallel implementation |
 | 4 | Report | [Open folder](report/) | Analyses on each implementation in terms of speedup and efficiency |
 
