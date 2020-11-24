@@ -1,1 +1,0 @@
-/usr/bin/c++   -Wall -Wextra -fopenmp    CMakeFiles/nbody-omp.dir/src/nbody-omp.cpp.o  -o nbody-omp ../include/graphics/vendor/glfw/src/libglfw3.a -pthread /usr/lib/x86_64-linux-gnu/librt.so -lm -ldl /usr/lib/x86_64-linux-gnu/libX11.so ../libglad.a 
